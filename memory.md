@@ -66,6 +66,7 @@
   - Linked the backend operator guide from the root `README.md` so the project overview routes backend users to the operational instructions.
   - Hardened the root `.gitignore` to exclude generated Supabase `.temp` and `.branches` state, logs, coverage output, and local credentials before Git initialization.
   - Excluded Supabase Studio scratch snippets from version control; deployable Supabase configuration and migrations remain tracked.
+  - Initialized the root Git repository on `main`, added `https://github.com/BhuvanNagesh/PharmaLens.git` as `origin`, committed the reviewed project as `11f9a2f` (`feat: add PharmaLens backend and Supabase foundation`), and pushed `main` successfully.
 - **Active Technical Context:**
   - Backend target: Python 3.11+, FastAPI, SQLAlchemy 2.0 async ORM, asyncpg, and Alembic.
   - Database target: Supabase PostgreSQL inside the Docker stack, connected through `SUPABASE_DB_URL`.
