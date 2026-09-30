@@ -1,0 +1,39 @@
+# Local secrets and environment overrides.
+.env
+*.env
+!.env.example
+
+# Python generated files and local tooling state.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Frontend dependencies and build output.
+node_modules/
+dist/
+build/
+
+# Optional local model weights and generated artifacts.
+models/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Local Supabase and editor artifacts.
+.supabase/
+supabase/.temp/
+supabase/.branches/
+supabase/snippets/
+.vscode/
+.idea/
+
+# Logs and local coverage output.
+*.log
+.coverage
+htmlcov/

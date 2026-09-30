@@ -1,0 +1,97 @@
+- **Current Phase:** Phase 3 — Backend security hardening after LangGraph pipeline completion
+- **Overall Status:** Awaiting Review
+- **Completed Tasks (Latest):**
+  - Completed and approved Phase 1 database migrations, ORM schema, regulatory seed data, and live foreign-key verification.
+  - Completed Phase 2 Step 1 document extraction for PDF and DOCX files with PyPDF2/pdfplumber fallback behavior and DOCX paragraph/table extraction.
+  - Added `pharmalens-backend/app/services/storage_service.py` with asynchronous Supabase Storage upload, signed URL, download, and deletion operations.
+  - Corrected deletion to use Supabase Storage's `DELETE /storage/v1/object/{bucket}` endpoint with the object path in the `prefixes` request body.
+  - Restricted application Storage requests to the configured publishable key and the configured private bucket; no service-role key was added to source or `.env`.
+  - Added canonical UUID-based document paths, PDF/DOCX MIME validation, path traversal protection, bounded signed URL expiry, safe HTTP error conversion, and client cleanup.
+  - Created the local private `pharmalens-docs` bucket in Supabase Studio with the PDF/DOCX MIME allowlist and a 300 MiB per-file limit.
+  - Applied and verified exactly three bucket-scoped `anon` policies for upload, read, and delete on `storage.objects`.
+  - Added `supabase/migrations/20260930000000_storage_policies.sql` so the Storage policies are reproducible during deployment.
+  - Added the configured `pharmalens-docs` bucket definition to `supabase/config.toml` with the private setting, MIME allowlist, and 300 MiB limit.
+  - Passed the live Storage smoke test using the publishable key: upload, signed URL creation, download byte equality, and deletion all succeeded; temporary smoke objects were removed.
+  - Verified the Storage service with an `httpx.MockTransport`: upload, signed URL, download, deletion, publishable-key headers, and unsafe-path rejection all passed.
+  - Added Pydantic schemas for documents, templates, template sections, paginated collections, and the API health response.
+  - Added document endpoints for multipart PDF/DOCX upload, paginated listing, detail retrieval, and storage/database deletion with audit events.
+  - Added compliance-template CRUD endpoints with section validation, eager async loading, pagination, audit events, and protection against deleting templates referenced by analyses.
+  - Added a Pydantic compatibility boundary that accepts legacy `framework`, `section_name`, section-level `description`, and `is_mandatory` request fields while preserving canonical database names.
+  - Added read-only legacy response aliases and documented the compatibility contract in `PharmaLens_Backend_PRD.md` and `PharmaLens_Architecture.md`; no database migration or column rename was made.
+  - Added `main.py` with CORS from `.env`, `/api/health`, router registration, SQLAlchemy lifespan cleanup, and safe JSON handling for unexpected errors.
+  - Passed the live API smoke test against the Supabase Docker stack: health, template CRUD/validation, PDF upload/detail/list/delete, and unsupported-file rejection.
+  - Passed the legacy-template compatibility smoke test using the older PRD field names.
+  - Updated the architecture, rules, backend PRD, phase plan, and Supabase config from 10 MB/50 MiB limits to a consistent 300 MB limit.
+  - Verified Python syntax after the compatibility change, confirmed temporary API test records were cleaned up, and removed generated Python `__pycache__` directories after final validation.
+  - Paused the Phase 3 transition to add an optional Dolphin-v2 layout-aware PDF parsing provider before the compliance pipeline work.
+  - Added `app/services/dolphin_parser.py` with lazy runtime imports, in-memory PDF rendering, Dolphin layout parsing, heading/table/formula prompts, cached model loading, and safe error conversion.
+  - Added `native`, `auto`, and `dolphin` parser modes; `auto` attempts Dolphin only for empty/short native PDF output, and both enhanced modes fall back to native extraction when the optional runtime is unavailable.
+  - Moved document extraction to `asyncio.to_thread` so optional model inference does not block the FastAPI event loop.
+  - Added optional runtime settings to `.env`, `app/core/config.py`, and `requirements-dolphin.txt` without adding model weights to the repository.
+  - Updated the architecture, backend PRD, rules, and phase plan to document the optional provider and its deployment boundary.
+  - Received approval to continue and started Phase 3 Step 1: compliance state definition and sequential graph skeleton.
+  - Added `app/agents/compliance_pipeline.py` with the required `ComplianceState`, fully initialized state factory, state-shape validation, four sequential node boundaries, and compiled `START → document_parser → regulatory_mapper → gap_analyzer → corrective_action_recommender → END` graph.
+  - Added `app/agents/__init__.py` exports for the compliance state, graph builder, compiled graph, and initial-state factory.
+  - Installed and verified the pinned runtime set: `langgraph==0.4.7`, `langchain-core==0.3.86`, `langgraph-checkpoint==2.0.26`, `langgraph-prebuilt==0.2.3`, and `langgraph-sdk==0.2.15`.
+  - Updated `PharmaLens_Rules.md` with the companion LangGraph pins required for reproducible installation.
+  - Verified graph compilation, sequential invocation, required node names, state preservation, Python syntax, and cleanup of generated `__pycache__` directories.
+  - Added `app/agents/schemas.py` with strict Pydantic models for parsed sections, regulatory mappings, gap findings, and corrective actions.
+  - Added `app/agents/llm_config.py` with lazy Gemini 1.5 Flash primary construction, GPT-4o-mini fallback construction, structured-output invocation, and provider failure handling.
+  - Added the four agent implementations: document parser, regulatory mapper, gap analyzer/risk classifier, and corrective-action recommender.
+  - Connected the four agent implementations to the compiled LangGraph while keeping failures in `ComplianceState.error` for the upcoming background service.
+  - Installed and verified the pinned LLM bindings `langchain-google-genai==2.1.4` and `langchain-openai==0.3.4`; aligned `langchain-core` to `0.3.86` because those pinned bindings require the newer 0.3.x release.
+  - Verified all agent output contracts and the complete four-node graph with offline fake structured-model responses; no external LLM request was made.
+  - Received approval to continue and started Phase 3 Step 3: deterministic quantitative compliance-score calculation.
+  - Added `app/services/analysis_service.py` with deterministic weighted scoring, severity counts, category thresholds, and invalid-severity validation.
+  - Added a `score_compliance` graph node after the four LLM agents; it writes the numeric score into `ComplianceState.compliance_score` without making another LLM call.
+  - Updated `PharmaLens_Architecture.md` to document deterministic score calculation after corrective-action generation.
+  - Verified empty, boundary, mixed-severity, penalty-floor, and graph-integrated scoring cases; syntax and generated-cache cleanup also passed.
+  - Added `app/schemas/analysis.py` with request, accepted, status, history, nested gap, corrective-action, and full report schemas.
+  - Added `app/services/scoring.py` and moved deterministic scoring there so the background service can import the graph without a circular dependency; the service continues to re-export the score helpers for compatibility.
+  - Added `app/services/analysis_service.py` background execution with independent `AsyncSessionLocal` sessions, LangGraph execution in a worker thread, atomic persistence of gaps/actions/score/summary, completion timestamps, and bounded failure persistence.
+  - Added `app/api/analyses.py` with `POST /api/analyses` returning 202, paginated `GET /api/analyses` history with document/status filters, and eager-loaded `GET /api/analyses/{id}` status/report responses.
+  - Added analysis trigger/completion/failure audit events and graceful cancellation of outstanding analysis tasks before database-pool shutdown.
+  - Registered the analysis router and shutdown hook in `main.py`, exported the analysis router and schemas, and documented the background-session contract in the architecture, backend PRD, and phase plan.
+  - Verified route OpenAPI generation, Python compilation, offline completed-analysis persistence, offline failure-to-`failed` transition, audit events, and generated-cache cleanup; no external LLM request was made.
+  - Added `pharmalens-backend/requirements.txt` with the pinned runtime dependencies required for clean-machine deployment and added a root `.gitignore` that excludes secrets, caches, environments, dependencies, and optional model weights.
+  - Added Alembic migration `002_enable_public_rls.py`, enabling deny-by-default RLS on `alembic_version` and every public application table: documents, templates, sections, analyses, gaps, corrective actions, and audit logs.
+  - Added startup recovery for interrupted `processing` analyses, safe persisted failure messages, strict validation of pipeline gap/action relationships, and atomic rejection of malformed structured output.
+  - Hardened document uploads with filename controls, PDF/DOCX content-signature checks, DOCX table extraction, cleanup after unexpected persistence failures, and safe Storage-client shutdown.
+  - Hardened Storage input validation, explicit empty-value handling, configurable request timeout, safe HTTP error mapping, and SQLAlchemy `hide_parameters=True` database logging.
+  - Added bounded per-provider structured-LLM retry attempts through `LLM_MAX_ATTEMPTS`, corrected legacy template `framework` responses to return the governing body, and removed the nonexistent Supabase seed-file reference from `supabase/config.toml`.
+  - Updated the architecture, backend PRD, rules, and phase plan for RLS, dependency pins, deployment recovery, file validation, and the corrected storage-failure contract.
+  - Full offline audit passed: Python compilation, app/OpenAPI registration, Alembic migration history, DOCX paragraph/table extraction, Storage mock/validation checks, analysis completion/failure invariants, interrupted-analysis recovery, and no-placeholder scan.
+  - Added the root `README.md` with the implemented architecture, repository layout, local Supabase/Docker setup, backend installation, environment configuration, migrations, API surface, analysis workflow, security model, verification commands, deployment checklist, and troubleshooting guidance.
+  - Added `pharmalens-backend/README.md` as the backend operator guide with quick start, environment setup, migrations, API usage examples, upload and analysis workflows, parser modes, verification checks, production deployment notes, and troubleshooting.
+  - Linked the backend operator guide from the root `README.md` so the project overview routes backend users to the operational instructions.
+  - Hardened the root `.gitignore` to exclude generated Supabase `.temp` and `.branches` state, logs, coverage output, and local credentials before Git initialization.
+  - Excluded Supabase Studio scratch snippets from version control; deployable Supabase configuration and migrations remain tracked.
+- **Active Technical Context:**
+  - Backend target: Python 3.11+, FastAPI, SQLAlchemy 2.0 async ORM, asyncpg, and Alembic.
+  - Database target: Supabase PostgreSQL inside the Docker stack, connected through `SUPABASE_DB_URL`.
+  - Supabase Storage is the original-document store through the Docker stack and its persistent volume.
+  - Storage bucket: `pharmalens-docs`, private, 300 MiB per-file limit, and allowed MIME types `application/pdf` and `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
+  - Storage policies: `pharmalens anon upload` for `insert`, `pharmalens anon read` for `select`, and `pharmalens anon delete` for `delete`, each restricted to `bucket_id = 'pharmalens-docs'` and role `anon`.
+  - Application Storage authentication uses `SUPABASE_PUBLISHABLE_KEY` for `apikey` and `Authorization`; the service-role key is intentionally not used.
+  - Engine pool settings are `pool_size=10`, `max_overflow=20`, and `pool_pre_ping=True`.
+  - Sessions use `expire_on_commit=False`.
+  - Alembic revision `001_initial_schema` is applied; migration `002_enable_public_rls` is implemented but pending on the database that produced the linter output. The database contains the `alembic_version` table.
+  - Live verification returned the expected application table list, 3 compliance templates, and 11 template sections.
+  - Phase 2 Steps 1–3 and Phase 3 Steps 1–4 plus backend security hardening are implemented; the current API surface is `/api/health`, `/api/documents`, `/api/templates`, and `/api/analyses`.
+  - The configured local mode is `native`; the planned alternatives are `auto` (native first, Dolphin for empty/scanned PDFs) and `dolphin` (Dolphin first with native fallback).
+  - Phase 3 Steps 1–2 are implemented; agent nodes make structured LangChain calls and write `parsed_sections`, `section_mappings`, `gaps`, `corrective_actions`, and `summary` into the shared state.
+  - Phase 3 Step 3 is implemented; the graph runs `START → four agents → score_compliance → END`.
+  - Phase 3 Step 4 uses independent `AsyncSessionLocal` sessions inside background tasks; request sessions are not reused after the `POST /api/analyses` response.
+- **Known Issues/Blockers:**
+  - The pasted `.env` contained credentials that were exposed in the conversation; rotate the Google API key and replace any exposed Supabase key before sharing or deploying. Never echo them into source or documentation.
+  - The local `npx supabase` CLI is not currently available from this workspace, and Docker API access is unavailable here, so stack lifecycle commands must be run from the user's machine where Docker Desktop and the Supabase CLI are installed.
+  - The repository has not completed Phase 0 scaffolding; Docker, Supabase CLI, complete dependency-file installation, and local stack startup remain prerequisites for a clean-machine setup.
+  - The source documents use prefixed filenames (`PharmaLens_*.md`) instead of the unprefixed names referenced by the kickoff prompt.
+  - The phase plan's original “15+” seed-section acceptance count conflicted with its explicit 11-section list; the acceptance criterion now matches the list.
+  - The current architecture and live ORM remain canonical (`governing_body`, `version`, `section_code`, `title`, and `requirement_text`); legacy API names are now translated at the request/response boundary, so no database compatibility migration is required.
+  - Dolphin-v2 is an optional heavyweight local dependency; its model files and inference libraries are not installed in the current backend environment.
+  - Actual Dolphin model inference remains unverified until the optional runtime and model are installed on a machine with sufficient memory; fallback behavior is verified locally.
+  - Live Gemini/OpenAI agent inference is intentionally not run during local verification to avoid external API usage; it requires valid provider credentials and an explicit analysis run.
+  - Live analysis API integration against the Supabase Docker stack remains to be verified on the user's machine because Docker and the local Supabase CLI are unavailable in this workspace.
+  - The new RLS migration has not been applied to the database that produced the linter output in this workspace; run `alembic upgrade head` from `pharmalens-backend` against that configured Supabase database, then rerun the Supabase database linter.
+- **Next Steps:** Apply and live-verify `002_enable_public_rls`; after approval, execute Phase 4 — Frontend Design System & Clinical Editorial Shell.
